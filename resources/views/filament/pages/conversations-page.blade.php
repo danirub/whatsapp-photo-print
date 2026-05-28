@@ -209,6 +209,72 @@
 .cv-meta { font-size: 10px; color: #4b5563; margin-top: 4px; display: flex; align-items: center; gap: 5px; }
 .cv-meta-label { font-size: 9px; background: rgba(255,255,255,.05); border-radius: 4px; padding: 1px 6px; color: #6b7280; }
 
+/* ─── Reply bar ─── */
+.cv-reply {
+    flex-shrink: 0;
+    padding: 12px 16px;
+    background: rgba(255,255,255,.03);
+    border-top: 1px solid rgba(255,255,255,.06);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+.cv-reply-input {
+    flex: 1;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 22px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #e5e7eb;
+    outline: none;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.5;
+    transition: border-color .15s;
+    font-family: inherit;
+}
+.cv-reply-input:focus { border-color: rgba(245,158,11,.5); }
+.cv-reply-input::placeholder { color: #4b5563; }
+.cv-reply-send {
+    width: 42px; height: 42px;
+    background: #f59e0b;
+    border: none; border-radius: 50%;
+    color: #000; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background .15s, transform .1s;
+}
+.cv-reply-send:hover { background: #d97706; transform: scale(1.05); }
+.cv-reply-send:disabled { background: #374151; color: #6b7280; cursor: not-allowed; transform: none; }
+
+/* ─── Image bubble ─── */
+.cv-img-thumb {
+    max-width: 220px;
+    max-height: 220px;
+    border-radius: 10px;
+    display: block;
+    cursor: zoom-in;
+    border: 1px solid rgba(255,255,255,.1);
+}
+.cv-img-modal {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.85);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+.cv-img-modal.open { display: flex; }
+.cv-img-modal img { max-width: 90vw; max-height: 90vh; border-radius: 10px; }
+.cv-img-modal-close {
+    position: fixed; top: 20px; right: 24px;
+    background: rgba(255,255,255,.1); border: none;
+    color: #fff; font-size: 24px; cursor: pointer;
+    border-radius: 50%; width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+}
+
 /* ─── Empty state ─── */
 .cv-empty-main {
     flex: 1; display: flex; flex-direction: column;
@@ -363,12 +429,17 @@
 
                     <div class="cv-msg {{ $msg['direction'] === 'outbound' ? 'out' : 'in' }}">
                         <div class="cv-bubble-wrap">
-                            <div class="cv-bubble">
+                            <div class="cv-bubble" style="{{ $msg['type'] === 'image' && $msg['image_url'] ? 'padding:6px;' : '' }}">
                                 @if($msg['type'] === 'image')
-                                    <div class="cv-bubble-img">
-                                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
-                                        Image received
-                                    </div>
+                                    @if($msg['image_url'])
+                                        <img src="{{ $msg['image_url'] }}" class="cv-img-thumb"
+                                             onclick="openImgModal('{{ $msg['image_url'] }}')">
+                                    @else
+                                        <div class="cv-bubble-img">
+                                            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+                                            Image received
+                                        </div>
+                                    @endif
                                 @elseif($msg['type'] === 'buttons')
                                     @php
                                         $parts = explode("\n", $msg['content']);
@@ -400,12 +471,32 @@
                 @endforelse
             </div>
 
+            {{-- Reply Bar --}}
+            <div class="cv-reply">
+                <textarea
+                    class="cv-reply-input"
+                    wire:model="replyText"
+                    placeholder="Type a message to send via WhatsApp…"
+                    rows="1"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();@this.sendReply();}"
+                ></textarea>
+                <button class="cv-reply-send" wire:click="sendReply" wire:loading.attr="disabled">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
+                </button>
+            </div>
+
         @else
             <div class="cv-empty-main">
                 <svg width="72" height="72" fill="none" viewBox="0 0 24 24" stroke="#6b7280"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8.625 9.75a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 01.778-.332 48.294 48.294 0 005.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
                 <p>Select a conversation<br>from the sidebar to view messages</p>
             </div>
         @endif
+    </div>
+
+    {{-- Image lightbox modal --}}
+    <div class="cv-img-modal" id="cv-img-modal" onclick="closeImgModal()">
+        <button class="cv-img-modal-close" onclick="closeImgModal()">✕</button>
+        <img id="cv-img-modal-img" src="" alt="Order image">
     </div>
 
     {{-- ── RIGHT ORDER INFO ── --}}
@@ -484,6 +575,16 @@ function scrollToBottom() {
 }
 scrollToBottom();
 document.addEventListener('livewire:updated', scrollToBottom);
+
+// Image lightbox
+function openImgModal(url) {
+    document.getElementById('cv-img-modal-img').src = url;
+    document.getElementById('cv-img-modal').classList.add('open');
+}
+function closeImgModal() {
+    document.getElementById('cv-img-modal').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeImgModal(); });
 
 // Sidebar search filter
 function filterConvs(val) {
