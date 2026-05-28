@@ -8,6 +8,8 @@ Route::get('/', function () {
     return redirect('/admin');
 });
 
+Route::get('/privacy', fn() => view('privacy'))->name('privacy');
+
 // WhatsApp Meta Cloud API webhook
 Route::get('/webhook/whatsapp', [WhatsAppWebhookController::class, 'verify'])->name('webhook.whatsapp.verify');
 Route::post('/webhook/whatsapp', [WhatsAppWebhookController::class, 'receive'])->name('webhook.whatsapp');
